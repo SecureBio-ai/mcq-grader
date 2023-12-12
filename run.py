@@ -54,12 +54,12 @@ def question_harness(exam_content, prompt_path, model, model_params):
 
     api_key = load_api_link(model)
 
-    all_responses = []
+    successful_responses = []
     failed_responses = []
     # Loop through exam questions
     for index, line in tqdm(enumerate(exam_content.strip().split('\n'))):
         entry = json.loads(line)
-        entry['question_index'] = index
+        # entry['question_index'] = index
 
         question = entry.get('question')
         choices = entry.get('choices')
@@ -70,7 +70,7 @@ def question_harness(exam_content, prompt_path, model, model_params):
             entry["prompt"] = prompt
         except Exception as e:
             entry["exception"] = e
-            failed_responses.append(json.dumps(entry))
+            failed_responses.append(entry)
             print(f"An error occurred while preparing the prompt. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
             continue
 
@@ -79,27 +79,56 @@ def question_harness(exam_content, prompt_path, model, model_params):
             response = call_model(prompt, model, model_params, api_key)
         except Exception as e:
             entry["exception"] = e
-            failed_responses.append(json.dumps(entry))
+            failed_responses.append(entry)
             print(f"An error occurred while calling the model. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
             continue
 
-        response_content = response.choices[0].message.content
+        message = response.choices[0].message.content
+
+        # By default, save message_content to model_response
+        message_key = "model_response"
+        message_dict = {message_key: message}
+        entry.update(message_dict)
+
+        validated_message = validate_openai_response_json(message)
 
         # Try treating model output as JSON to separate entries like 'model_answer' and 'justification'.
-        # Otherwise, save the entire response to the JSON object
         try:
-            json_response_content = json.loads(response_content)
+            json_message = json.loads(validated_message)
+            entry.update(json_message)
+            print(json.dumps(entry))
+            successful_responses.append(entry)
         except JSONDecodeError:
-            response_key = "model_response"
-            json_response_content = {response_key: response_content}
             print(f"Response content could not be parsed in JSON format. Saving all content to single JSON entry...")
+            failed_responses.append(entry)
 
-        # append model response to entry JSON
-        entry.update(json_response_content)
-        print(json.dumps(entry))
-        all_responses.append(json.dumps(entry))
+    return successful_responses, failed_responses
 
-    return all_responses, failed_responses
+
+def score_exam(successful_responses, failed_responses):
+    successful_q = len(successful_responses)
+    failed_q = len(failed_responses)
+    total_q = successful_q + failed_q
+
+    correct = 0
+    graded_questions = []
+    for question in successful_responses:
+        if question['answer'] == question['model_answer']:
+            correct += 1
+            question['correct'] = 1
+            graded_questions.append(question)
+        else:
+            question['correct'] = 0
+            graded_questions.append(question)
+
+    print("\n--------Scoring statistics--------")
+    print(f"Total questions = {total_q}")
+    print(f"Valid responses recieved on {successful_q}/{total_q} ({round(successful_q/total_q, 2)}) questions. Among "
+          f"the valid responses...")
+    print(f"Accuracy = {correct}/{successful_q} ({round(correct/successful_q, 2)})")
+
+    return graded_questions
+
 
 
 def main():
@@ -132,23 +161,30 @@ def main():
         df_preprocessed = preprocess_exam_df(df)
 
         # Convert df to mmlu-style jsonl file
-        exam_jsonl = convert_df_to_mmlu_jsonl(df_preprocessed, Path(run['input']).stem)
+        exam_jsonl = convert_df_to_mmlu_jsonl(df_preprocessed, run['name'])
         with open(Path(run['input']).with_suffix('.jsonl'), 'w') as file:
             file.write(exam_jsonl)
         print(f"JSONL version of the exam successfully saved in to {Path(run['input']).with_suffix('.jsonl')}")
 
         print("Getting model responses...")
-        responses, failed_responses = question_harness(exam_jsonl, run['prompt'], run['model'], run['model-params'])
+        successful_responses, failed_responses = question_harness(exam_jsonl, run['prompt'], run['model'], run['model-params'])
+
+        # Grade successful_responses
+        graded_questions = score_exam(successful_responses, failed_responses)
+        order_json_keys(graded_questions)
 
         if failed_responses:
+            order_json_keys(graded_questions)
             print(f"WARNING: {len(failed_responses)} failed.\n")
             with open(f"./results/{results_path}/failed-{Path(run['input']).stem}.jsonl", 'w') as file:
                 for obj in failed_responses:
                     file.write(obj + '\n')
 
-        with open(f"./results/{results_path}/graded-{Path(run['input']).stem}.jsonl", 'w') as file:
-            for obj in responses:
+        graded_exam_path = f"./results/{results_path}/graded-{Path(run['input']).stem}.jsonl"
+        with open(graded_exam_path, 'w') as file:
+            for obj in graded_questions:
                 file.write(obj + '\n')
+
 
         # todo get summary stats
         # todo save model answers to input tsv
