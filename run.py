@@ -4,7 +4,9 @@ from model_utils import *
 from data_utils import *
 from prompt_utils import format_prompt
 from pathlib import Path
+import os
 import json
+from json.decoder import JSONDecodeError
 from tqdm import tqdm
 
 def parse_args():
@@ -25,9 +27,19 @@ def process_samplesheet(file_path):
         # Update the DataFrame with the actual dictionary
         df.at[index, 'model-params'] = params_dict
 
-        # todo build checks to see if prompt file and input file exist
-        # todo check that input file is .tsv and prompt file is .json
-        # todo check that 'task_description' exists in the prompt file
+        # Check if input file exists and is a .tsv file
+        if not os.path.isfile(row['input']) or not row['input'].endswith('.tsv'):
+            raise FileNotFoundError(f"Input file {row['input']} does not exist or is not a .tsv file")
+
+        # Check if prompt file exists and is a .json file
+        if not os.path.isfile(row['prompt']) or not row['prompt'].endswith('.json'):
+            raise FileNotFoundError(f"Prompt file {row['prompt']} does not exist or is not a .json file")
+
+        # Check that 'task_description' exists in the prompt file
+        with open(row['prompt'], 'r') as file:
+            prompt_data = json.load(file)
+            if 'task_description' not in prompt_data:
+                raise ValueError(f"task_description not found in {row['prompt']}")
 
     return df
 
@@ -44,13 +56,15 @@ def question_harness(exam_content, prompt_path, model, model_params):
 
     all_responses = []
     failed_responses = []
+    # Loop through exam questions
     for index, line in tqdm(enumerate(exam_content.strip().split('\n'))):
         entry = json.loads(line)
-        entry['index'] = index
+        entry['question_index'] = index
 
         question = entry.get('question')
         choices = entry.get('choices')
 
+        # Get question-specific prompt
         try:
             prompt = format_prompt(task_description, question, choices)
             entry["prompt"] = prompt
@@ -60,6 +74,7 @@ def question_harness(exam_content, prompt_path, model, model_params):
             print(f"An error occurred while preparing the prompt. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
             continue
 
+        # Get model reponse
         try:
             response = call_model(prompt, model, model_params, api_key)
         except Exception as e:
@@ -68,13 +83,20 @@ def question_harness(exam_content, prompt_path, model, model_params):
             print(f"An error occurred while calling the model. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
             continue
 
-        response_content = json.loads(response.choices[0].message.content)
-        # todo check json output format and send to failed_responses if incorrect
+        response_content = response.choices[0].message.content
+
+        # Try treating model output as JSON to separate entries like 'model_answer' and 'justification'.
+        # Otherwise, save the entire response to the JSON object
+        try:
+            json_response_content = json.loads(response_content)
+        except JSONDecodeError:
+            response_key = "model_response"
+            json_response_content = {response_key: response_content}
+            print(f"Response content could not be parsed in JSON format. Saving all content to single JSON entry...")
 
         # append model response to entry JSON
-        entry = {**entry, **response_content}
+        entry.update(json_response_content)
         print(json.dumps(entry))
-
         all_responses.append(json.dumps(entry))
 
     return all_responses, failed_responses
@@ -99,7 +121,14 @@ def main():
         results_path = f"{run['name']}_{datestring}"
         os.mkdir(f"./results/{results_path}")
 
-        df = check_exam(run['input'])
+        df, failed_checks = validate_exam(run['input'])
+        if sum(len(indices) for indices in failed_checks.values()) != 0:
+            with open(f"./results/{results_path}/exam-warnings.txt", 'w') as file:
+                for check, items in failed_checks.items():
+                    if items:
+                        for index, question in items:
+                            file.write(f"Warning for {check}: Row {index}, Question: {question}\n")
+
         df_preprocessed = preprocess_exam_df(df)
 
         # Convert df to mmlu-style jsonl file
@@ -120,6 +149,9 @@ def main():
         with open(f"./results/{results_path}/graded-{Path(run['input']).stem}.jsonl", 'w') as file:
             for obj in responses:
                 file.write(obj + '\n')
+
+        # todo get summary stats
+        # todo save model answers to input tsv
 
 
 if __name__ == "__main__":

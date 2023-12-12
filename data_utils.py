@@ -30,36 +30,48 @@ def parse_model_params(params):
         raise ValueError("Error parsing model params. Ensure it's a valid dictionary.")
 
 
-def check_exam(input):
-    REQUIRED_COLUMNS = ['type', 'question']
-    ALL_OPTIONS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+def validate_exam(input):
+    REQUIRED_COLUMNS = ['question', 'A', 'B', 'answer']
 
     df = validate_input_csv(input, REQUIRED_COLUMNS, delimiter='\t')
 
-    # Check whether all question types are supported
-    with open('question-types.txt', 'r') as file:
-        supported_q_types = {line.strip() for line in file}
+    failed_checks = {
+        'empty_A_or_B': [],
+        'empty_question': [],
+        'invalid_answer': []
+    }
 
-    unsupported_types = df[~df['type'].isin(supported_q_types)]['type'].unique()
-    if len(unsupported_types) > 0:
-        print(f"WARNING: Unsupported question types found: {unsupported_types}")
+    choice_columns = [col for col in df.columns if col.isupper() and len(col) == 1]
 
-    # Check for missing option columns
-    max_mcq_option = max(int(q_type.split('-')[1]) for q_type in df['type'].unique() if 'MCQ' in q_type)
-    expected_options = ALL_OPTIONS[:max_mcq_option]
-    missing_columns = [opt for opt in expected_options if opt not in df.columns]
-    if missing_columns:
-        print(f"WARNING: Missing option columns {missing_columns} for the highest MCQ option MCQ-{max_mcq_option}")
+    for index, row in df.iterrows():
+        # Check 1: Columns A and B should not be empty
+        if pd.isna(row['A']) or pd.isna(row['B']):
+            failed_checks['empty_A_or_B'].append((index, row['question']))
 
-    # todo check that TF questions use answer option A or B not TRUE or FALSE
-    # todo check for blank questions and answers
-    # todo check that answer exists among possible options
+        # Check 2: 'question' rows should have text
+        if pd.isna(row['question']) or row['question'].strip() == '':
+            failed_checks['empty_question'].append((index, row['question']))
 
-    return df
+        # Check 3: 'answer' should match one of the answer column options
+        answer = row['answer']
+        if answer not in choice_columns or pd.isna(row.get(answer, None)):
+            failed_checks['invalid_answer'].append((index, row['question']))
+
+        # Print summary of warnings
+    total_warnings = sum(len(indices) for indices in failed_checks.values())
+    print(f"Exam validation complete with {total_warnings} warnings")
+
+    # Print just the indices for warnings
+    for check, items in failed_checks.items():
+        if items:
+            indices = [index for index, _ in items]
+            print(f"Warning for {check}: Row indices {indices} failed this check.")
+
+    return df, failed_checks
 
 
 def convert_df_to_mmlu_jsonl(df, subject):
-    choice_columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+    choice_columns = [col for col in df.columns if col.isupper() and len(col) == 1]
 
     jsonl_entries = []
     for index, row in df.iterrows():
@@ -67,7 +79,7 @@ def convert_df_to_mmlu_jsonl(df, subject):
         answer_index = choice_columns.index(row['answer'])  # Convert answer to index
 
         # Collect choices that contain text and are present in the DataFrame
-        choices = [row[col] for col in choice_columns if col in df.columns and pd.notna(row[col]) and row[col] != '']
+        choices = [row[col] for col in choice_columns if pd.notna(row[col]) and row[col] != '']
 
         json_object = {
             "question": question,
@@ -82,7 +94,7 @@ def convert_df_to_mmlu_jsonl(df, subject):
 
 
 def preprocess_exam_df(df):
-    columns_to_preprocess = ['question', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+    columns_to_preprocess = ['question'] + [col for col in df.columns if col.isupper() and len(col) == 1]
 
     # Regular expression to match trailing whitespaces after a period
     trailing_whitespace_regex = re.compile(r'\.\s{2,}')
