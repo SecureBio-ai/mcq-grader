@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 import re
+import ast
 
 
 def validate_input_csv(file_path, REQUIRED_COLUMNS, delimiter=None):
@@ -17,12 +18,11 @@ def validate_input_csv(file_path, REQUIRED_COLUMNS, delimiter=None):
     return df
 
 
-def parse_model_params(row):
-    params = row['model-params']
+def parse_model_params(params):
     if pd.isna(params) or params.strip() == '':
         return {}
     try:
-        params_dict = eval(params)
+        params_dict = ast.literal_eval(params)
         if not isinstance(params_dict, dict):
             raise ValueError("Model params should be a dictionary.")
         return params_dict
