@@ -68,3 +68,12 @@ def call_openai(client, model, prompt, model_params):
     )
 
     return response
+
+
+def validate_openai_response_json(message):
+    def ensure_ends_with_quote_and_brace(s):
+        if not s.endswith("\"}"):
+            return s[:-1] + "\"}"
+        return s
+
+    return ensure_ends_with_quote_and_brace(message)
