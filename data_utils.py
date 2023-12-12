@@ -82,6 +82,7 @@ def convert_df_to_mmlu_jsonl(df, subject):
         choices = [row[col] for col in choice_columns if pd.notna(row[col]) and row[col] != '']
 
         json_object = {
+            "question_index": index,
             "question": question,
             "subject": subject,
             "choices": choices,
@@ -118,3 +119,10 @@ def preprocess_exam_df(df):
             df[col] = df[col].apply(preprocess_text)
 
     return df
+
+
+def order_json_keys(entries):
+    ORDER = ['question_index', 'question', 'subject', 'choices', 'answer', 'model_answer', 'correct',
+                        'justification', 'prompt', 'model_response']
+
+    return {key: entries[key] for key in ORDER if key in entries}
