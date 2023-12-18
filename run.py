@@ -170,9 +170,5 @@ def main():
                 file.write(json.dumps(obj) + '\n')
 
 
-        # todo get summary stats
-        # todo save model answers to input tsv
-
-
 if __name__ == "__main__":
     main()
