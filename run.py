@@ -6,7 +6,6 @@ from prompt_utils import format_prompt
 from pathlib import Path
 import os
 import json
-from json.decoder import JSONDecodeError
 from tqdm import tqdm
 
 def parse_args():
@@ -85,22 +84,7 @@ def question_harness(exam_content, prompt_path, model, model_params):
 
         message = response.choices[0].message.content
 
-        # By default, save message_content to model_response
-        message_key = "model_response"
-        message_dict = {message_key: message}
-        entry.update(message_dict)
-
-        validated_message = validate_openai_response_json(message)
-
-        # Try treating model output as JSON to separate entries like 'model_answer' and 'justification'.
-        try:
-            json_message = json.loads(validated_message)
-            entry.update(json_message)
-            print(json.dumps(entry))
-            successful_responses.append(entry)
-        except JSONDecodeError:
-            print(f"Response content could not be parsed in JSON format. Saving all content to single JSON entry...")
-            failed_responses.append(entry)
+        process_openai_json_output(message, entry, successful_responses, failed_responses)
 
     return successful_responses, failed_responses
 
@@ -178,12 +162,12 @@ def main():
             print(f"WARNING: {len(failed_responses)} failed.\n")
             with open(f"./results/{results_path}/failed-{Path(run['input']).stem}.jsonl", 'w') as file:
                 for obj in failed_responses:
-                    file.write(obj + '\n')
+                    file.write(json.dumps(obj) + '\n')
 
         graded_exam_path = f"./results/{results_path}/graded-{Path(run['input']).stem}.jsonl"
         with open(graded_exam_path, 'w') as file:
             for obj in graded_questions:
-                file.write(obj + '\n')
+                file.write(json.dumps(obj) + '\n')
 
 
         # todo get summary stats
