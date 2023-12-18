@@ -1,2 +1,4 @@
+.idea/
 ./results/
-./samplesheet.csv
+samplesheet-json.csv
+samplesheet-eleuther.csv
