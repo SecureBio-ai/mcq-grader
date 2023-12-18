@@ -9,5 +9,5 @@ def format_prompt(task_description, question, choices):
 
     formatted_choices = format_choices_by_letter(choices)
 
-    prompt = task_description + '\n' + question + '\n' + formatted_choices
+    prompt = task_description + question + "\nChoices:\n" + formatted_choices + "\nAnswer: "
     return prompt

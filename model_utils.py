@@ -2,6 +2,7 @@ import os
 from datetime import timedelta
 from ratelimit import sleep_and_retry, limits
 from openai import OpenAI
+import string
 import json
 import ast
 
@@ -95,3 +96,30 @@ def process_openai_json_output(message, entry, successful_responses, failed_resp
     except SyntaxError:
         print(f"Response content could not be parsed in JSON format. Saving all content to single JSON entry...")
         failed_responses.append(entry)
+        
+        
+def process_eleuther_style_output(message, entry, successful_responses, failed_responses):
+    # By default, save message_content to model_response
+    entry["model_response"] = message
+    entry['justification'] = ''
+
+    answer_choices = list(string.ascii_uppercase[:len(entry['choices'])])
+    after_answer_chars = ['.', ':']
+    try:
+        # Grab first letter from message
+        answer_char = message[0]
+    except IndexError:
+        print(("'message' response from model is empty. Adding to failed_responses."))
+        return successful_responses, failed_responses.append(entry)
+
+    # Check if first letter is in list of possible choices
+    if answer_char.upper() not in answer_choices:
+        print("WARNING: First character of 'message' not in list of choices. Adding to failed_responses.")
+        return successful_responses, failed_responses.append(entry)
+    # Check if second letter is a period or colon
+    elif message[1] not in after_answer_chars:
+        print("WARNING: Second character of 'message' is not a period or colon. Adding to failed_responses.")
+        return successful_responses, failed_responses.append(entry)
+    else:
+        entry['model_answer'] = answer_choices.index(answer_char)
+        return successful_responses.append(entry), failed_responses

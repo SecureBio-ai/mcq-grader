@@ -66,7 +66,7 @@ def question_harness(exam_content, prompt_path, model, model_params):
         # Get question-specific prompt
         try:
             prompt = format_prompt(task_description, question, choices)
-            entry["prompt"] = prompt
+            entry["prompt"] = prompt_path
         except Exception as e:
             entry["exception"] = e
             failed_responses.append(entry)
@@ -84,7 +84,8 @@ def question_harness(exam_content, prompt_path, model, model_params):
 
         message = response.choices[0].message.content
 
-        process_openai_json_output(message, entry, successful_responses, failed_responses)
+        process_eleuther_style_output(message, entry, successful_responses, failed_responses)
+        # process_openai_json_output(message, entry, successful_responses, failed_responses)
 
     return successful_responses, failed_responses
 
