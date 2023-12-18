@@ -3,6 +3,8 @@ from datetime import timedelta
 from ratelimit import sleep_and_retry, limits
 from openai import OpenAI
 import string
+import json
+import ast
 
 OPENAI_MODELS = ["gpt-3.5-turbo", "gpt-4", "gpt-4-1106-preview"]
 REPLICATE_MODELS = ["llama2_70b", "llama2_13b", "llama2_7b", "gpt-2-xl", "gpt-2-large", "airoboros", "spicyboros",
@@ -80,6 +82,22 @@ def validate_openai_response_json(message):
     return ensure_ends_with_quote_and_brace(message)
 
 
+def process_openai_json_output(message, entry, successful_responses, failed_responses):
+    # By default, save message_content to model_response
+    entry["model_response"] = message
+
+    validated_message = validate_openai_response_json(message)
+
+    # Try treating model output as JSON (dict) to separate entries like 'model_answer' and 'justification'.
+    try:
+        message_dict = ast.literal_eval(validated_message)
+        entry.update(message_dict)
+        successful_responses.append(entry)
+    except SyntaxError:
+        print(f"Response content could not be parsed in JSON format. Saving all content to single JSON entry...")
+        failed_responses.append(entry)
+        
+        
 def process_eleuther_style_output(message, entry, successful_responses, failed_responses):
     # By default, save message_content to model_response
     entry["model_response"] = message

@@ -6,7 +6,6 @@ from prompt_utils import format_prompt
 from pathlib import Path
 import os
 import json
-from json.decoder import JSONDecodeError
 from tqdm import tqdm
 
 def parse_args():
@@ -86,6 +85,7 @@ def question_harness(exam_content, prompt_path, model, model_params):
         message = response.choices[0].message.content
 
         process_eleuther_style_output(message, entry, successful_responses, failed_responses)
+        # process_openai_json_output(message, entry, successful_responses, failed_responses)
 
     return successful_responses, failed_responses
 
@@ -169,10 +169,6 @@ def main():
         with open(graded_exam_path, 'w') as file:
             for obj in graded_questions:
                 file.write(json.dumps(obj) + '\n')
-
-
-        # todo get summary stats
-        # todo save model answers to input tsv
 
 
 if __name__ == "__main__":
