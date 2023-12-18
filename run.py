@@ -156,18 +156,18 @@ def main():
 
         # Grade successful_responses
         graded_questions = score_exam(successful_responses, failed_responses)
-        order_json_keys(graded_questions)
+        graded_questions_ordered = [order_dict_keys(question) for question in graded_questions]
 
         if failed_responses:
-            order_json_keys(graded_questions)
-            print(f"WARNING: {len(failed_responses)} failed.\n")
+            failed_responses_ordered = [order_dict_keys(question) for question in failed_responses]
+            print(f"WARNING: {len(failed_responses)} failed. Saving failed responses to results dir.\n")
             with open(f"./results/{results_path}/failed-{Path(run['input']).stem}.jsonl", 'w') as file:
-                for obj in failed_responses:
+                for obj in failed_responses_ordered:
                     file.write(json.dumps(obj) + '\n')
 
         graded_exam_path = f"./results/{results_path}/graded-{Path(run['input']).stem}.jsonl"
         with open(graded_exam_path, 'w') as file:
-            for obj in graded_questions:
+            for obj in graded_questions_ordered:
                 file.write(json.dumps(obj) + '\n')
 
 

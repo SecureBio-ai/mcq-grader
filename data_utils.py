@@ -121,7 +121,7 @@ def preprocess_exam_df(df):
     return df
 
 
-def order_json_keys(entries):
+def order_dict_keys(entries):
     ORDER = ['question_index', 'question', 'subject', 'choices', 'answer', 'model_answer', 'correct',
                         'justification', 'prompt', 'model_response']
 
