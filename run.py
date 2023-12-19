@@ -1,6 +1,5 @@
 import argparse
 from datetime import datetime
-import pandas as pd
 from model_utils import *
 from data_utils import *
 from prompt_utils import format_prompt
@@ -8,6 +7,7 @@ from pathlib import Path
 import os
 import json
 from tqdm import tqdm
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -70,7 +70,8 @@ def question_harness(exam_content, prompt_path, model, model_params):
         except Exception as e:
             entry["exception"] = e
             failed_responses.append(entry)
-            print(f"An error occurred while preparing the prompt. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
+            print(
+                f"An error occurred while preparing the prompt. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
             continue
 
         # Get model reponse
@@ -79,7 +80,8 @@ def question_harness(exam_content, prompt_path, model, model_params):
         except Exception as e:
             entry["exception"] = e
             failed_responses.append(entry)
-            print(f"An error occurred while calling the model. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
+            print(
+                f"An error occurred while calling the model. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
             continue
 
         message = response.choices[0].message.content
@@ -90,13 +92,15 @@ def question_harness(exam_content, prompt_path, model, model_params):
     return successful_responses, failed_responses
 
 
-def score_exam(successful_responses, failed_responses):
+def score_exam(successful_responses, failed_responses, report_path):
     successful_q = len(successful_responses)
     failed_q = len(failed_responses)
     total_q = successful_q + failed_q
 
     correct = 0
     graded_questions = []
+    report_content = []
+
     for question in successful_responses:
         if question['answer'] == question['model_answer']:
             correct += 1
@@ -106,14 +110,19 @@ def score_exam(successful_responses, failed_responses):
             question['correct'] = 0
             graded_questions.append(question)
 
-    print("\n--------Scoring statistics--------")
-    print(f"Total questions = {total_q}")
-    print(f"Valid responses recieved on {successful_q}/{total_q} ({round(successful_q/total_q, 2)}) questions. Among "
-          f"the valid responses...")
-    print(f"Accuracy = {correct}/{successful_q} ({round(correct/successful_q, 2)})")
+    report_content.append("--------Scoring statistics--------\n")
+    report_content.append(f"Total questions = {total_q}\n")
+    report_content.append(
+        f"Valid responses received on {successful_q}/{total_q} ({round(successful_q / total_q, 2)}) questions. Among the valid responses...\n")
+    report_content.append(f"Accuracy = {correct}/{successful_q} ({round(correct / successful_q, 2)})\n")
+
+    report_text = "".join(report_content)
+    print(report_text)
+
+    with open(report_path, 'w') as file:
+        file.write(report_text)
 
     return graded_questions
-
 
 
 def main():
@@ -152,10 +161,12 @@ def main():
         print(f"JSONL version of the exam successfully saved in to {Path(run['input']).with_suffix('.jsonl')}")
 
         print("Getting model responses...")
-        successful_responses, failed_responses = question_harness(exam_jsonl, run['prompt'], run['model'], run['model-params'])
+        successful_responses, failed_responses = question_harness(exam_jsonl, run['prompt'], run['model'],
+                                                                  run['model-params'])
 
         # Grade successful_responses
-        graded_questions = score_exam(successful_responses, failed_responses)
+        report_path = f"./results/{results_path}/score-report-{Path(run['input']).stem}.txt"
+        graded_questions = score_exam(successful_responses, failed_responses, report_path)
         graded_questions_ordered = [order_dict_keys(question) for question in graded_questions]
 
         if failed_responses:
@@ -175,6 +186,7 @@ def main():
 
         df_combined_exam = merge_exam_dataframes(df, df_graded_exam)
         df_combined_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}.csv")
+
 
 if __name__ == "__main__":
     main()
