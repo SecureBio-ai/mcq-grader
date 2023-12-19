@@ -59,7 +59,6 @@ def question_harness(exam_content, prompt_path, model, model_params):
     # Loop through exam questions
     for index, line in tqdm(enumerate(exam_content.strip().split('\n'))):
         entry = json.loads(line)
-        # entry['question_index'] = index
 
         question = entry.get('question')
         choices = entry.get('choices')
@@ -67,7 +66,7 @@ def question_harness(exam_content, prompt_path, model, model_params):
         # Get question-specific prompt
         try:
             prompt = format_prompt(task_description, question, choices)
-            entry["prompt"] = prompt_path
+            entry["prompt"] = prompt_path  # saving prompt path instead of prompt text to data footprint
         except Exception as e:
             entry["exception"] = e
             failed_responses.append(entry)
@@ -171,11 +170,11 @@ def main():
             for obj in graded_questions_ordered:
                 file.write(json.dumps(obj) + '\n')
 
-    df_graded_exam = pd.DataFrame(graded_questions_ordered).set_index('question_index')
-    df_graded_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}-mmlu-format.csv")
+        df_graded_exam = pd.DataFrame(graded_questions_ordered).set_index('question_index')
+        df_graded_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}-mmlu-format.csv")
 
-    df_combined_exam = merge_exam_dataframes(df, df_graded_exam)
-    df_combined_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}.csv")
+        df_combined_exam = merge_exam_dataframes(df, df_graded_exam)
+        df_combined_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}.csv")
 
 if __name__ == "__main__":
     main()
