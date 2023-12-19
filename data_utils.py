@@ -37,6 +37,7 @@ def validate_exam(input):
     df = validate_input_csv(input, REQUIRED_COLUMNS, delimiter='\t')
 
     failed_checks = {
+        'incorrect_column_order': [],
         'empty_A_or_B': [],
         'empty_question': [],
         'invalid_answer': []
@@ -44,16 +45,34 @@ def validate_exam(input):
 
     choice_columns = [col for col in df.columns if col.isupper() and len(col) == 1]
 
+    # Check 1: Column order
+    # Check 1.1: Ensure 'question' is the first column
+    if df.columns[0] != 'question':
+        failed_checks['incorrect_column_order'].append("First column is not 'question'")
+
+    # Check 1.2: Ensure 'answer' is after all choice columns
+    answer_index = df.columns.get_loc('answer')
+    for col in choice_columns:
+        if df.columns.get_loc(col) > answer_index:
+            failed_checks['incorrect_column_order'].append(f"Choice column {col} appears after 'answer'")
+
+    # Check 1.3: Ensure there are no additional columns before 'answer'
+    for col in df.columns[:answer_index]:
+        if col not in choice_columns and col != 'question':
+            failed_checks['incorrect_column_order'].append(
+                f"Column {col} appears before 'answer'. Columns not among the required columns \
+                ('question', choices ('A', 'B', etc.), and 'answer') should come after the 'answer' column.")
+
     for index, row in df.iterrows():
-        # Check 1: Columns A and B should not be empty
+        # Check 2: Columns A and B should not be empty
         if pd.isna(row['A']) or pd.isna(row['B']):
             failed_checks['empty_A_or_B'].append((index, row['question']))
 
-        # Check 2: 'question' rows should have text
+        # Check 3: 'question' rows should have text
         if pd.isna(row['question']) or row['question'].strip() == '':
             failed_checks['empty_question'].append((index, row['question']))
 
-        # Check 3: 'answer' should match one of the answer column options
+        # Check 4: 'answer' should match one of the answer column options
         answer = row['answer']
         if answer not in choice_columns or pd.isna(row.get(answer, None)):
             failed_checks['invalid_answer'].append((index, row['question']))
@@ -123,8 +142,8 @@ def preprocess_exam_df(df):
 
 
 def order_dict_keys(entries):
-    ORDER = ['question_index', 'question', 'subject', 'choices', 'answer', 'model_answer', 'correct',
-                        'justification', 'prompt', 'model_response']
+    ORDER = ['question_index', 'question', 'subject', 'choices', 'answer', 'model_answer', 'correct', 'model_response',
+                        'justification', 'prompt']
 
     return {key: entries[key] for key in ORDER if key in entries}
 
@@ -133,7 +152,11 @@ def merge_exam_dataframes(df_orig, df_exam):
     choice_columns = [col for col in df_orig.columns if col.isupper() and len(col) == 1]
     column_order = ['question']
     column_order.extend(choice_columns)
-    column_order.extend(['answer', 'model_answer', 'correct', 'subject', 'justification', 'prompt', 'model_response'])
+    column_order.extend(['answer', 'model_answer', 'correct', 'model_response', 'subject', 'justification', 'prompt'])
+
+    # Append any additional columns from df_orig that are not in the specified column_order
+    additional_columns = [col for col in df_orig.columns if col not in column_order]
+    column_order.extend(additional_columns)
 
     combined_df = pd.merge(df_orig, df_exam, on='question_index', how='left', suffixes=('', '_drop'))
     combined_df.drop([col for col in combined_df if col.endswith('_drop')], axis=1, inplace=True)

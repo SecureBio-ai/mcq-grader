@@ -34,7 +34,9 @@ An example input sheet
 ## Exam format
 The exam should be a .tsv file with at least four columns: `{question, A, B, answer}`. The exam can have A-Z option 
 columns. If your exam has different kinds of multiple-choice questions (e.g., True/False, a question with six options) 
-simply leave the option columns you don't need blank. You may include other columns (with different names) – these 
+simply leave the option columns you don't need blank.    
+
+You may include other columns (with different names) after the question, choices, and answer columns – these 
 will be ignored by mcq-grader.
 
 Mcq-grader will parse the exam to check for logical inconsistencies like "Correct answer given as C but only options A 
