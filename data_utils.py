@@ -7,6 +7,7 @@ import ast
 def validate_input_csv(file_path, REQUIRED_COLUMNS, delimiter=None):
     try:
         df = pd.read_csv(file_path, delimiter=delimiter)
+        df.index.name = 'question_index'
     except FileNotFoundError:
         raise FileNotFoundError(f"The file {file_path} does not exist.")
     except pd.errors.EmptyDataError:
@@ -126,3 +127,26 @@ def order_dict_keys(entries):
                         'justification', 'prompt', 'model_response']
 
     return {key: entries[key] for key in ORDER if key in entries}
+
+
+def merge_exam_dataframes(df_orig, df_exam):
+    choice_columns = [col for col in df_orig.columns if col.isupper() and len(col) == 1]
+    column_order = ['question']
+    column_order.extend(choice_columns)
+    column_order.extend(['answer', 'model_answer', 'correct', 'subject', 'justification', 'prompt', 'model_response'])
+
+    combined_df = pd.merge(df_orig, df_exam, on='question_index', how='left', suffixes=('', '_drop'))
+    combined_df.drop([col for col in combined_df if col.endswith('_drop')], axis=1, inplace=True)
+    combined_df.drop('choices', axis=1, inplace=True)
+
+    # Function to convert model_answer index to letter
+    def index_to_letter(index):
+        if 0 <= index < len(choice_columns):
+            return choice_columns[index]
+        return None
+
+    combined_df['model_answer'] = combined_df['model_answer'].apply(index_to_letter)
+
+    combined_df = combined_df[column_order]
+
+    return combined_df

@@ -1,5 +1,6 @@
 import argparse
 from datetime import datetime
+import pandas as pd
 from model_utils import *
 from data_utils import *
 from prompt_utils import format_prompt
@@ -170,6 +171,11 @@ def main():
             for obj in graded_questions_ordered:
                 file.write(json.dumps(obj) + '\n')
 
+    df_graded_exam = pd.DataFrame(graded_questions_ordered).set_index('question_index')
+    df_graded_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}-mmlu-format.csv")
+
+    df_combined_exam = merge_exam_dataframes(df, df_graded_exam)
+    df_combined_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}.csv")
 
 if __name__ == "__main__":
     main()
