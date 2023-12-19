@@ -44,8 +44,8 @@ and B have text in them."
 
 An example exam
 
-| question                                                                                 | A                   | B            | C                            | D                                                          | E             | answer |
-|------------------------------------------------------------------------------------------|---------------------|--------------|------------------------------|------------------------------------------------------------|---------------|--------|
-| Which of the following is the most special characteristic of the adaptive immune system? | Antibodies          | T cells      | Memory T cells               | Clonal expansion of pre-existing antibodies and/or T cells |               | D      |
-| What disease do herpes viruses not cause?                                                | Infantile paralysis | Encephalitis | Sexually transmitted disease | Cancer                                                     | Mononucleosis | A      |
+| question                                                                                 | A                   | B            | C                            | D                                                          | E             | answer | optional columns... |
+|------------------------------------------------------------------------------------------|---------------------|--------------|------------------------------|------------------------------------------------------------|---------------|--------|---------------------|
+| Which of the following is the most special characteristic of the adaptive immune system? | Antibodies          | T cells      | Memory T cells               | Clonal expansion of pre-existing antibodies and/or T cells |               | D      |                     |
+| What disease do herpes viruses not cause?                                                | Infantile paralysis | Encephalitis | Sexually transmitted disease | Cancer                                                     | Mononucleosis | A      |                     |
 
