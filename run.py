@@ -27,9 +27,10 @@ def process_samplesheet(file_path):
         # Update the DataFrame with the actual dictionary
         df.at[index, 'model-params'] = params_dict
 
-        # Check if input file exists and is a .tsv file
-        if not os.path.isfile(row['input']) or not row['input'].endswith('.tsv'):
-            raise FileNotFoundError(f"Input file {row['input']} does not exist or is not a .tsv file")
+        # Check if input file exists and is a .tsv or .jsonl file
+        if not os.path.isfile(row['input']) or (
+                not row['input'].endswith('.tsv') and not row['input'].endswith('.jsonl')):
+            raise FileNotFoundError(f"Input file {row['input']} does not exist or is not a .tsv or .jsonl file")
 
         # Check if prompt file exists and is a .json file
         if not os.path.isfile(row['prompt']) or not row['prompt'].endswith('.json'):
@@ -57,23 +58,19 @@ def question_harness(exam_content, prompt_path, model, model_params):
     successful_responses = []
     failed_responses = []
     # Loop through exam questions
-    for index, line in tqdm(enumerate(exam_content.strip().split('\n'))):
-        entry = json.loads(line)
+    for index, entry in tqdm(enumerate(exam_content)):
         entry['model'] = model
         entry['model_params'] = model_params
 
-        question = entry.get('question')
-        choices = entry.get('choices')
-
         # Get question-specific prompt
         try:
-            prompt = format_prompt(task_description, question, choices)
+            prompt = format_prompt(task_description, entry['question'], entry['choices'])
             entry["prompt"] = prompt_path  # saving prompt path instead of prompt text to data footprint
         except Exception as e:
             entry["exception"] = e
             failed_responses.append(entry)
             print(
-                f"An error occurred while preparing the prompt. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
+                f"An error occurred while preparing the prompt. Question {index}: {entry['question']} : \n{RED}{e}{RESET}\n Skipping...")
             continue
 
         # Get model reponse
@@ -83,7 +80,7 @@ def question_harness(exam_content, prompt_path, model, model_params):
             entry["exception"] = e
             failed_responses.append(entry)
             print(
-                f"An error occurred while calling the model. Question {index}: {question} : \n{RED}{e}{RESET}\n Skipping...")
+                f"An error occurred while calling the model. Question {index}: {entry['question']} : \n{RED}{e}{RESET}\n Skipping...")
             continue
 
         message = response.choices[0].message.content
@@ -143,51 +140,70 @@ def main():
         print(f"  Model Params: {run['model-params']}\n")
 
         datestring = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-        results_path = f"{run['name']}_{datestring}"
-        os.mkdir(f"./results/{results_path}")
+        results_path = f"./results/{run['name']}_{datestring}"
+        os.mkdir(results_path)
 
-        df, failed_checks = validate_exam(run['input'])
-        if sum(len(indices) for indices in failed_checks.values()) != 0:
-            with open(f"./results/{results_path}/exam-warnings.txt", 'w') as file:
-                for check, items in failed_checks.items():
-                    if items:
-                        for index, question in items:
-                            file.write(f"Warning for {check}: Row {index}, Question: {question}\n")
+        if run['input'].endswith('.jsonl'):
+            # todo check mmlu virology format
+            jsonl_mode = True
+            exam_jsonl = []
+            with open(run['input'], 'r') as file:
+                for index, line in enumerate(file):
+                    entry = json.loads(line)
+                    entry['question_index'] = index
+                    exam_jsonl.append(entry)
+            df = pd.DataFrame(exam_jsonl).set_index('question_index')
 
-        df_preprocessed = preprocess_exam_df(df)
+            # todo implement checks and text preprocessing
+        else:
+            jsonl_mode = False
 
-        # Convert df to mmlu-style jsonl file
-        exam_jsonl = convert_df_to_mmlu_jsonl(df_preprocessed, run['name'])
-        with open(Path(run['input']).with_suffix('.jsonl'), 'w') as file:
-            file.write(exam_jsonl)
-        print(f"JSONL version of the exam successfully saved in to {Path(run['input']).with_suffix('.jsonl')}")
+            # Load tsv file to dataframe and validate exam format
+            df, failed_checks = validate_exam(run['input'])
+            if sum(len(indices) for indices in failed_checks.values()) != 0:
+                with open(f"{results_path}/exam-warnings.txt", 'w') as file:
+                    for check, items in failed_checks.items():
+                        if items:
+                            for index, question in items:
+                                file.write(f"Warning for {check}: Row {index}, Question: {question}\n")
+
+            # Preprocess exam text
+            df_preprocessed = preprocess_exam_df(df)
+
+            # Convert exam df to mmlu-style jsonl file
+            exam_jsonl = convert_df_to_mmlu_jsonl(df_preprocessed, run['name'])
+            exam_jsonl_path = os.path.join(results_path, Path(run['input']).stem + '.jsonl')
+            with open(exam_jsonl_path, 'w') as file:
+                for obj in exam_jsonl:
+                    file.write(json.dumps(obj) + '\n')
+            print(f"JSONL version of the exam successfully saved in to {exam_jsonl_path}")
 
         print("Getting model responses...")
         successful_responses, failed_responses = question_harness(exam_jsonl, run['prompt'], run['model'],
                                                                   run['model-params'])
 
         # Grade successful_responses
-        report_path = f"./results/{results_path}/score-report-{Path(run['input']).stem}.txt"
+        report_path = f"{results_path}/score-report-{Path(run['input']).stem}.txt"
         graded_questions = score_exam(successful_responses, failed_responses, report_path)
         graded_questions_ordered = [order_dict_keys(question) for question in graded_questions]
 
         if failed_responses:
             failed_responses_ordered = [order_dict_keys(question) for question in failed_responses]
             print(f"WARNING: {len(failed_responses)} failed. Saving failed responses to results dir.\n")
-            with open(f"./results/{results_path}/failed-{Path(run['input']).stem}.jsonl", 'w') as file:
+            with open(f"{results_path}/failed-{Path(run['input']).stem}.jsonl", 'w') as file:
                 for obj in failed_responses_ordered:
-                    file.write(json.dumps(obj) + '\n')
+                    file.write(json.dumps(obj))
+                    file.write('\n')
 
-        graded_exam_path = f"./results/{results_path}/graded-{Path(run['input']).stem}.jsonl"
+        graded_exam_path = f"{results_path}/graded-{Path(run['input']).stem}.jsonl"
         with open(graded_exam_path, 'w') as file:
             for obj in graded_questions_ordered:
                 file.write(json.dumps(obj) + '\n')
 
         df_graded_exam = pd.DataFrame(graded_questions_ordered).set_index('question_index')
-        df_graded_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}-mmlu-format.csv")
 
-        df_combined_exam = merge_exam_dataframes(df, df_graded_exam)
-        df_combined_exam.to_csv(f"./results/{results_path}/graded-{Path(run['input']).stem}.csv")
+        df_combined_exam = merge_exam_dataframes(df, df_graded_exam, jsonl_mode)
+        df_combined_exam.to_csv(f"{results_path}/graded-{Path(run['input']).stem}.csv")
 
 
 if __name__ == "__main__":
