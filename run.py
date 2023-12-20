@@ -59,6 +59,8 @@ def question_harness(exam_content, prompt_path, model, model_params):
     # Loop through exam questions
     for index, line in tqdm(enumerate(exam_content.strip().split('\n'))):
         entry = json.loads(line)
+        entry['model'] = model
+        entry['model_params'] = model_params
 
         question = entry.get('question')
         choices = entry.get('choices')

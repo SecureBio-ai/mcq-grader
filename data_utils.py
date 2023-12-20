@@ -143,7 +143,7 @@ def preprocess_exam_df(df):
 
 def order_dict_keys(entries):
     ORDER = ['question_index', 'question', 'subject', 'choices', 'answer', 'model_answer', 'correct', 'model_response',
-                        'justification', 'prompt']
+             'model', 'model_params', 'justification', 'prompt']
 
     return {key: entries[key] for key in ORDER if key in entries}
 
@@ -152,7 +152,8 @@ def merge_exam_dataframes(df_orig, df_exam):
     choice_columns = [col for col in df_orig.columns if col.isupper() and len(col) == 1]
     column_order = ['question']
     column_order.extend(choice_columns)
-    column_order.extend(['answer', 'model_answer', 'correct', 'model_response', 'subject', 'justification', 'prompt'])
+    column_order.extend(['answer', 'model_answer', 'correct', 'model_response', 'model', 'model_params', 'subject',
+                         'justification', 'prompt'])
 
     # Append any additional columns from df_orig that are not in the specified column_order
     additional_columns = [col for col in df_orig.columns if col not in column_order]
