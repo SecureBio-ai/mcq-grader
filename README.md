@@ -28,8 +28,8 @@ An example input sheet
 
 | name                     | input | prompt | model | model-params |
 |--------------------------| --- | --- | --- | --- |
-| gpt4-mmlu-virology       | ./data/mmlu/virology.tsv | ./grading-prompts/mmlu-gpt.json | gpt-4 | {temperature: 0.9} |
-| llama2-70b-mmlu-virology | ./data/mmlu/virology.tsv | ./grading-prompts/mmlu-llama.json | llama2_70b | |
+| gpt4-mmlu-virology       | ./data/mmlu/virology.jsonl | ./grading-prompts/mmlu-gpt.json | gpt-4 | {temperature: 0.9} |
+| llama2-70b-mmlu-virology | ./data/mmlu/virology-extended.tsv | ./grading-prompts/mmlu-llama.json | llama2_70b | |
 
 ## Exam format
 The exam can be a MMLU-style .jsonl file or a .tsv file.  
