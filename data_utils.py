@@ -2,6 +2,7 @@ import pandas as pd
 import json
 import re
 import ast
+import string
 
 
 def validate_input_csv(file_path, REQUIRED_COLUMNS, delimiter=None):
@@ -93,9 +94,8 @@ def validate_exam(input):
 def convert_df_to_mmlu_jsonl(df, subject):
     choice_columns = [col for col in df.columns if col.isupper() and len(col) == 1]
 
-    jsonl_entries = []
+    jsonl_content = []
     for index, row in df.iterrows():
-        question = row['question']
         answer_index = choice_columns.index(row['answer'])  # Convert answer to index
 
         # Collect choices that contain text and are present in the DataFrame
@@ -103,16 +103,19 @@ def convert_df_to_mmlu_jsonl(df, subject):
 
         json_object = {
             "question_index": index,
-            "question": question,
+            "question": row['question'],
             "subject": subject,
             "choices": choices,
             "answer": answer_index
         }
-        jsonl_entries.append(json.dumps(json_object))
+        jsonl_content.append(json_object)
 
-    jsonl_content = "\n".join(jsonl_entries)
     return jsonl_content
 
+
+def convert_mmlu_df_to_exam_df(df):
+
+    return df
 
 def preprocess_exam_df(df):
     columns_to_preprocess = ['question'] + [col for col in df.columns if col.isupper() and len(col) == 1]
@@ -148,10 +151,27 @@ def order_dict_keys(entries):
     return {key: entries[key] for key in ORDER if key in entries}
 
 
-def merge_exam_dataframes(df_orig, df_exam):
-    choice_columns = [col for col in df_orig.columns if col.isupper() and len(col) == 1]
+def merge_exam_dataframes(df_orig, df_exam, jsonl_mode):
+    # Function to convert model_answer index to letter
+    def index_to_letter(index):
+        if 0 <= index < num_choices:
+            return choice_cols[index]
+        return None
+
     column_order = ['question']
-    column_order.extend(choice_columns)
+    if jsonl_mode:
+        num_choices = df_orig['choices'].apply(len).max()
+        choice_cols = list(string.ascii_uppercase[:num_choices])
+
+        choice_expansion = pd.DataFrame(df_orig['choices'].tolist(), columns=choice_cols, index=df_orig.index)
+        df_orig = df_orig.join(choice_expansion)
+        df_orig.drop(columns=['choices'], inplace=True)
+        df_orig['answer'] = df_orig['answer'].apply(index_to_letter)
+    else:
+        choice_cols = [col for col in df_orig.columns if col.isupper() and len(col) == 1]
+        num_choices = len(choice_cols)
+
+    column_order.extend(choice_cols)
     column_order.extend(['answer', 'model_answer', 'correct', 'model_response', 'model', 'model_params', 'subject',
                          'justification', 'prompt'])
 
@@ -161,16 +181,8 @@ def merge_exam_dataframes(df_orig, df_exam):
 
     combined_df = pd.merge(df_orig, df_exam, on='question_index', how='left', suffixes=('', '_drop'))
     combined_df.drop([col for col in combined_df if col.endswith('_drop')], axis=1, inplace=True)
+
     combined_df.drop('choices', axis=1, inplace=True)
-
-    # Function to convert model_answer index to letter
-    def index_to_letter(index):
-        if 0 <= index < len(choice_columns):
-            return choice_columns[index]
-        return None
-
     combined_df['model_answer'] = combined_df['model_answer'].apply(index_to_letter)
-
     combined_df = combined_df[column_order]
-
     return combined_df
